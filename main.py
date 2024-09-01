@@ -34,7 +34,7 @@ y_threshold = (15, 42)
 # checking difference between needle and haystack image
 THRESHOLD = 0.9
 # checking how big to make reference "needle" images
-SCALE_FACTORS = [round(0.5 + 0.05 * i, 2) for i in range(50)]
+SCALE_FACTORS = [round(0.5 + 0.05 * i, 2) for i in range(60)]
 
 # click the restart button when game over
 def restart(restart2_points):
@@ -48,6 +48,7 @@ def calibrate_scale_factor(scale_factors):
     max_matches = 0
     
     for scale in scale_factors:
+        print(f"Scale: {scale}")
         # resize the needle image according to the scale factor
         resized_needle = cv.resize(vision_unclicked_block.needle_image, None, fx=scale, fy=scale)
         
@@ -55,11 +56,11 @@ def calibrate_scale_factor(scale_factors):
         result = cv.matchTemplate(board_screenshot, resized_needle, cv.TM_CCOEFF_NORMED)
         locations = np.where(result >= THRESHOLD) # threshold
         num_matches = len(list(zip(*locations[::-1])))
-        
+        print(f"Matches: {num_matches}")
         if num_matches > max_matches:
             max_matches = num_matches
             best_scale = scale
-            
+    print(f"SCALE: {best_scale}")
     scale_coord_thresholds(best_scale)
     
     return best_scale
