@@ -31,7 +31,7 @@ class WindowCapture:
 
         # account for the window border and titlebar and cut them off
         border_pixels = 0
-        titlebar_pixels = 130
+        titlebar_pixels = 110
         self.w = self.w - (border_pixels * 2)
         self.h = self.h - titlebar_pixels - border_pixels
         self.cropped_x = border_pixels
@@ -78,3 +78,4 @@ class WindowCapture:
 
     def get_screen_position(self, pos):
         return (pos[0] + self.offset_x, pos[1] + self.offset_y)
+    

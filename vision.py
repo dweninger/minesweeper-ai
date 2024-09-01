@@ -13,22 +13,19 @@ class Vision:
         self.needle_height, self.needle_width = self.needle_image.shape[:2]
         self.method = method
 
-    def findClickpoints(self, haystack_image, threshold=0.8, scale_factors=[1.0], debug_mode='None'):
+    def findClickpoints(self, haystack_image, threshold=0.8, scale=1.0, debug_mode='None'):
         # Perform template matching at multiple scales
         matches = []
 
-        for scale in scale_factors:
-            resized_needle = cv2.resize(self.needle_image, None, fx=scale, fy=scale)
-            result = cv2.matchTemplate(haystack_image, resized_needle, self.method)
-            locations = np.where(result >= threshold)  # Threshold value to filter matches
-            location_tuples = list(zip(*locations[::-1])) # Zip to readable location tuples
+        resized_needle = cv2.resize(self.needle_image, None, fx=scale, fy=scale)
+        result = cv2.matchTemplate(haystack_image, resized_needle, self.method)
+        locations = np.where(result >= threshold)  # Threshold value to filter matches
+        location_tuples = list(zip(*locations[::-1])) # Zip to readable location tuples
 
-            for loc in location_tuples:
-                rect = [int(loc[0]), int(loc[1]), int(self.needle_width * scale), int(self.needle_height * scale)]
-                matches.append(rect)
-                matches.append(rect)
-            if len(matches) > 0:
-                break
+        for loc in location_tuples:
+            rect = [int(loc[0]), int(loc[1]), int(self.needle_width * scale), int(self.needle_height * scale)]
+            matches.append(rect)
+            matches.append(rect)
 
         # Group matches to find one per needle/haystack pair
         if len(matches) > 0:
