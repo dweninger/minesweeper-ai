@@ -7,6 +7,7 @@ from vision import Vision
 import pyautogui
 import random
 import keyboard
+import threading
 
 # List the name of each window available for capture
 #WindowCapture.list_window_names()
@@ -19,10 +20,11 @@ vision_two = Vision('two.png')
 vision_three = Vision('three.png')
 vision_four = Vision('four.png')
 vision_five = Vision('five.png')
-vision_restart2 = Vision('restart2.png')
+vision_restart2 = Vision('restart2.5.png')
 vision_restart3 = Vision('restart3.png')
 vision_flag = Vision('flag.png')
-game_over = False
+screenshot = None
+game_over = True
 stop_loop = False
 paused = False
 
@@ -34,21 +36,22 @@ y_threshold = (15, 42)
 # checking difference between needle and haystack image
 THRESHOLD = 0.9
 # checking how big to make reference "needle" images
-SCALE_FACTORS = [round(0.5 + 0.05 * i, 2) for i in range(60)]
+SCALE_FACTORS = [round(0.4 + 0.05 * i, 2) for i in range(50)]
 
-# click the restart button when game over
-def restart(restart2_points):
-    target = wincap.get_screen_position(restart2_points[0])
-    pyautogui.click(x=target[0], y=target[1])
-    
 # look at board size and scale the needle images accordingly
 def calibrate_scale_factor(scale_factors):
     board_screenshot = wincap.get_screenshot()
     best_scale = None
     max_matches = 0
+    global game_over
     
     for scale in scale_factors:
-        print(f"Scale: {scale}")
+        if check_for_done_state(scale) > 0 and game_over:
+            game_over = False
+            calibrate_scale_factor(scale_factors)
+        
+        game_over = False
+        
         # resize the needle image according to the scale factor
         resized_needle = cv.resize(vision_unclicked_block.needle_image, None, fx=scale, fy=scale)
         
@@ -56,14 +59,32 @@ def calibrate_scale_factor(scale_factors):
         result = cv.matchTemplate(board_screenshot, resized_needle, cv.TM_CCOEFF_NORMED)
         locations = np.where(result >= THRESHOLD) # threshold
         num_matches = len(list(zip(*locations[::-1])))
-        print(f"Matches: {num_matches}")
         if num_matches > max_matches:
             max_matches = num_matches
             best_scale = scale
-    print(f"SCALE: {best_scale}")
     scale_coord_thresholds(best_scale)
     
     return best_scale
+
+# click the restart button when game over
+def restart(restart_points):
+    target = wincap.get_screen_position(restart_points[0])
+    pyautogui.click(x=target[0], y=target[1])
+    
+# Check if game won/lost and restart if so
+def check_for_done_state(scale):
+    screenshot = wincap.get_screenshot()
+    restart2_points = vision_restart2.findClickpoints(screenshot, THRESHOLD, scale, debug_mode='points')
+    restart3_points = vision_restart3.findClickpoints(screenshot, THRESHOLD, scale, debug_mode='points')
+    
+    if len(restart2_points) > 0:
+        restart(restart2_points)
+        return scale
+    elif len(restart3_points) > 0:
+        restart(restart3_points)
+        return scale
+
+    return -1
 
 def scale_coord_thresholds(best_scale):
     global x_threshold, y_threshold
@@ -139,59 +160,64 @@ def resume():
     global paused
     paused = False
 
+# SCRIPT START
 keyboard.add_hotkey('q', stop)
 keyboard.add_hotkey('p', pause)
 keyboard.add_hotkey('r', resume)
 
+def main_loop():
+    while not stop_loop:
+        if paused:
+            sleep(0.1)
+            continue
+        
+        # get an updated image of the game
+        screenshot = wincap.get_screenshot()
+        # get each type of tile in separate lists
+        unclicked_block_points = vision_unclicked_block.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='rectangles')
+        one_points = vision_one.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
+        two_points = vision_two.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
+        three_points = vision_three.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
+        four_points = vision_four.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
+        five_points = vision_five.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
+        restart2_points = vision_restart2.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
+        
+        flag_points = vision_flag.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
+        # save each of the number points in a list so as to be able to easily loop through later
+        number_points_list = [None, one_points, two_points, three_points, four_points, five_points]
+        # restart button appears indicating game over
+        game_over = restart2_points and len(restart2_points) > 0
+        
+        if game_over:
+            # restart the game if lost
+            restart(restart2_points)
+        elif len(unclicked_block_points) > 0:
+            for i in range(1, 5):
+                found_num = check_number(i, number_points_list[i], unclicked_block_points, flag_points)
+                if found_num == True:
+                    break
+            if found_num == False:
+                print("Random selection.")
+                click_rand_tile(unclicked_block_points)
+        else:
+            print("Game Won!")
+            win_restart = input("Restart? (y/n): ")
+            if win_restart.lower() == "y":
+                restart3_points = vision_restart3.findClickpoints(screenshot, 0.95, best_scale, debug_mode='points')
+                restart(restart3_points)
+            else:
+                break
+
+        if cv.waitKey(1) == ord('q'):
+            cv.destroyAllWindows()
+            break
+        
+        # a little useless right now  
+        # sleep(0.01)
+
+
 best_scale = calibrate_scale_factor(SCALE_FACTORS)
 
-while not stop_loop:
-    if paused:
-        sleep(0.1)
-        continue
-    
-    # get an updated image of the game
-    screenshot = wincap.get_screenshot()
-    # get each type of tile in separate lists
-    unclicked_block_points = vision_unclicked_block.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='rectangles')
-    one_points = vision_one.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
-    two_points = vision_two.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
-    three_points = vision_three.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
-    four_points = vision_four.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
-    five_points = vision_five.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
-    restart2_points = vision_restart2.findClickpoints(screenshot, 0.95, best_scale, debug_mode='points')
-    
-    flag_points = vision_flag.findClickpoints(screenshot, THRESHOLD, best_scale, debug_mode='points')
-    # save each of the number points in a list so as to be able to easily loop through later
-    number_points_list = [None, one_points, two_points, three_points, four_points, five_points]
-    # restart button appears indicating game over
-    game_over = restart2_points and len(restart2_points) > 0
-    
-    if game_over:
-        # restart the game if lost
-        restart(restart2_points)
-    elif len(unclicked_block_points) > 0:
-        for i in range(1, 5):
-            found_num = check_number(i, number_points_list[i], unclicked_block_points, flag_points)
-            if found_num == True:
-                break
-        if found_num == False:
-            print("Random selection.")
-            click_rand_tile(unclicked_block_points)
-    else:
-        print("Game Won!")
-        win_restart = input("Restart? (y/n): ")
-        if win_restart.lower() == "y":
-            restart3_points = vision_restart3.findClickpoints(screenshot, 0.95, best_scale, debug_mode='points')
-            restart(restart3_points)
-        else:
-            break
-
-    if cv.waitKey(1) == ord('q'):
-        cv.destroyAllWindows()
-        break
-    
-    # a little useless right now  
-    sleep(0.011)
+main_loop()
 
 print('Done.')
