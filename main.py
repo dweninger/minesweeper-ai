@@ -7,7 +7,6 @@ from vision import Vision
 import pyautogui
 import random
 import keyboard
-import threading
 
 # List the name of each window available for capture
 #WindowCapture.list_window_names()
